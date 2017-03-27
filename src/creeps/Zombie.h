@@ -61,7 +61,8 @@ enum class ZombieState {
 class Zombie : public Movable {
 public:
     Zombie(int health = ZOMBIE_INIT_HP, ZombieState state = ZombieState::ZOMBIE_IDLE, int step = 0,
-           ZombieDirection dir = ZombieDirection::DIR_INVALID, int frame = ZOMBIE_FRAMES);
+           ZombieDirection dir = ZombieDirection::DIR_INVALID, int frame = ZOMBIE_FRAMES,
+           float range = 400.0f);
     virtual ~Zombie();
 
     void onCollision();
@@ -172,6 +173,12 @@ public:
         return frame;
     }
 
+    // returns the zombie's range.
+    // Jamie, 2017-03-27.
+    inline float getRange() const {
+        return range_;
+    }
+
 private:
     int health;         // health points of zombie
     std::string path;   // A* path zombie should follow
@@ -179,6 +186,7 @@ private:
     int step;           // Number of steps zombie has taken in path
     ZombieDirection dir;            // moving direction
     int frame;          // frames per tile
+    float range_;        // zombie's range.
 };
 
 #endif

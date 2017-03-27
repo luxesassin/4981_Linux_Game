@@ -5,9 +5,9 @@
 #include <utility>
 using namespace std;
 
-Zombie::Zombie(int health, ZombieState state, int step, ZombieDirection dir, int frame)
+Zombie::Zombie(int health, ZombieState state, int step, ZombieDirection dir, int frame, float range)
       : Movable(ZOMBIE_VELOCITY), health(health), state(state), step(step),
-        dir(dir), frame(frame) {
+        dir(dir), frame(frame), range_(range) {
     logv("Create Zombie\n");
 }
 
@@ -83,6 +83,107 @@ void Zombie::generateMove() {
         // Changed to attack state once attack code is ready
         if (state != ZombieState::ZOMBIE_IDLE) {
             setState(ZombieState::ZOMBIE_IDLE);
+        }
+
+        return;
+    }
+
+    const auto& mapMarines = GameManager::instance()->getMarines();
+
+    int32_t closestMarineId = 0;
+    float closestMarineDist = std::numeric_limits<float>::max();
+
+    // Detect marines
+    bool detectMarine = false;
+    for (const auto& item : mapMarines) {
+        const auto& entity = item.second;
+        float entityX = entity.getX();
+        float entityY = entity.getY();
+
+        float xDelta = abs((abs(entityX - MARINE_WIDTH / 2) - abs(getX() - ZOMBIE_WIDTH / 2)));
+        float yDelta = abs((abs(entityY - MARINE_HEIGHT / 2) - abs(getY() - ZOMBIE_HEIGHT / 2)));
+        xDelta *= xDelta;
+        yDelta *= yDelta;
+        float distance = sqrt(xDelta + yDelta);
+
+        if (distance < getRange()) {
+            if (distance < closestMarineDist) {
+                closestMarineId = item.first;
+                closestMarineDist = distance;
+                detectMarine = true;
+            }
+        }
+    }
+
+    const auto& mapTurrets = GameManager::instance()->getTurrets();
+
+    int32_t closestTurretId = 0;
+    float closestTurretDist = std::numeric_limits<float>::max();
+
+    // Detect turrets
+    bool detectTurret = false;
+    for (const auto& item : mapTurrets)
+    {
+        const auto& entity = item.second;
+        float entityX = entity.getX();
+        float entityY = entity.getY();
+
+        float xDelta = abs((abs(entityX - TURRET_WIDTH / 2) - abs(getX() - ZOMBIE_WIDTH / 2)));
+        float yDelta = abs((abs(entityY - TURRET_HEIGHT / 2) - abs(getY() - ZOMBIE_HEIGHT / 2)));
+        xDelta *= xDelta;
+        yDelta *= yDelta;
+        float distance = sqrt(xDelta + yDelta);
+
+        if (distance < getRange()) {
+            if (distance < closestTurretDist) {
+                closestTurretId = item.first;
+                closestTurretDist = distance;
+                detectTurret = true;
+            }
+        }
+    }
+
+    // Go to a target;
+    if (detectMarine) {
+        const auto& target = mapMarines.find(closestMarineId);
+        if (target != mapMarines.end()) {
+            float deltaX = getX() - target->second.getX();
+            float deltaY = getY() - target->second.getY();
+
+            double angle = ((atan2(deltaX, deltaY) * 180.0) / M_PI) * -1;
+            setAngle(angle);
+
+            float dirVecX = target->second.getX() - getX();
+            float dirVecY = target->second.getY() - getY();
+            float dirVecLen = sqrt(dirVecX * dirVecX + dirVecY * dirVecY);
+            float dirNorVecX = dirVecX / dirVecLen;
+            float dirNorVecY = dirVecY / dirVecLen;
+            float velVecX = ZOMBIE_VELOCITY * dirNorVecX;
+            float velVecY = ZOMBIE_VELOCITY * dirNorVecY;
+            setDX(velVecX);
+            setDY(velVecY);
+        }
+
+        return;
+    }
+    else if (detectTurret) {
+        const auto& target = mapTurrets.find(closestTurretId);
+        if (target != mapTurrets.end()) {
+            float deltaX = getX() - target->second.getX();
+            float deltaY = getY() - target->second.getY();
+
+            double angle = ((atan2(deltaX, deltaY) * 180.0) / M_PI) * -1;
+            setAngle(angle);
+
+            float dirVecX = target->second.getX() - getX();
+            float dirVecY = target->second.getY() - getY();
+            float dirVecLen = sqrt(dirVecX * dirVecX + dirVecY * dirVecY);
+            float dirNorVecX = dirVecX / dirVecLen;
+            float dirNorVecY = dirVecY / dirVecLen;
+            float velVecX = ZOMBIE_VELOCITY * dirNorVecX;
+            float velVecY = ZOMBIE_VELOCITY * dirNorVecY;
+            setDX(velVecX);
+            setDY(velVecY);
         }
 
         return;
