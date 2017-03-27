@@ -1,13 +1,18 @@
-#include "Node.h"
-#include "Zombie.h"
-#include "../log/log.h"
-#include "../game/GameManager.h"
+#include <math.h>
+#include <random>
+#include <cassert>
 #include <utility>
+#include "Zombie.h"
+#include "Node.h"
+#include "../game/GameManager.h"
+#include "../log/log.h"
 using namespace std;
 
-Zombie::Zombie(int health, ZombieState state, int step, ZombieDirection dir, int frame)
-      : Movable(ZOMBIE_VELOCITY), health(health), state(state), step(step),
-        dir(dir), frame(frame) {
+Zombie::Zombie(int32_t id, const SDL_Rect &dest, const SDL_Rect &movementSize, const SDL_Rect &projectileSize,
+        const SDL_Rect &damageSize, int health, ZombieState state, int step, ZombieDirection dir, int frame)
+        : Entity(id, dest, movementSize, projectileSize, damageSize),
+        Movable(id, dest, movementSize, projectileSize, damageSize, ZOMBIE_VELOCITY),
+        health(health), state(state), step(step), dir(dir), frame(frame) {
     logv("Create Zombie\n");
 }
 
@@ -57,10 +62,13 @@ bool Zombie::isMoving() const {
  * In theory, zombies will only have a movement collision with a target
  * as their pathfinding should walk around obstacles.
  * Robert Arendac
- * March 7
+ * March 18
 */
 bool Zombie::checkTarget() const {
-    return GameManager::instance()->getCollisionHandler().detectMovementCollision(this);
+    auto ch = GameManager::instance()->getCollisionHandler();
+    return (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeMarine, this), this)
+            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeObj, this), this)
+            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeTurret, this), this));
 }
 
 /**
@@ -69,87 +77,68 @@ bool Zombie::checkTarget() const {
  * March 13
 */
 void Zombie::generateMove() {
-    const ZombieDirection d = getMoveDir();   //Direction zombie is moving
+    const ZombieDirection direction = getMoveDir();   //Direction zombie is moving
     //cout << "move dir: " << d << " state: " << state << " Frame: " << frame << endl;
-    const float startX = getX();
-    const float startY = getY();
 
     // Path is empty, shouldn't move
-    if (d == ZombieDirection::DIR_INVALID || checkTarget()) {
+    if (direction == ZombieDirection::DIR_INVALID || checkTarget()) {
         if (frame > 0) {
             --frame;
         }
 
         // Changed to attack state once attack code is ready
-        if (state != ZombieState::ZOMBIE_IDLE) {
-            setState(ZombieState::ZOMBIE_IDLE);
-        }
+        setState(ZombieState::ZOMBIE_IDLE);
 
         return;
     }
 
-    // Each case will check if the zombie is within bounds before moving
-    switch(d) {
+    // Each case will set direction and angle based on the next step in the path
+    switch(direction) {
         case ZombieDirection::DIR_R:
-            if (checkBounds(startX + ZOMBIE_VELOCITY, startY)) {
-                setDX(ZOMBIE_VELOCITY);
-                setDY(0);
-                setAngle(static_cast<double>(ZombieAngles::EAST));
-            }
+            setDX(ZOMBIE_VELOCITY);
+            setDY(0);
+            setAngle(static_cast<double>(ZombieAngles::EAST));
             break;
         case ZombieDirection::DIR_RD:
-            if (checkBounds(startX + ZOMBIE_VELOCITY, startY + ZOMBIE_VELOCITY)) {
-                setDX(ZOMBIE_VELOCITY);
-                setDY(ZOMBIE_VELOCITY);
-                setAngle(static_cast<double>(ZombieAngles::SOUTHEAST));
-            }
+            setDX(ZOMBIE_VELOCITY);
+            setDY(ZOMBIE_VELOCITY);
+            setAngle(static_cast<double>(ZombieAngles::SOUTHEAST));
             break;
         case ZombieDirection::DIR_D:
-            if (checkBounds(startX, startY + ZOMBIE_VELOCITY)) {
-                setDX(0);
-                setDY(ZOMBIE_VELOCITY);
-                setAngle(static_cast<double>(ZombieAngles::SOUTH));
-            }
+            setDX(0);
+            setDY(ZOMBIE_VELOCITY);
+            setAngle(static_cast<double>(ZombieAngles::SOUTH));
             break;
         case ZombieDirection::DIR_LD:
-            if (checkBounds(startX - ZOMBIE_VELOCITY, startY + ZOMBIE_VELOCITY)) {
-                setDX(-ZOMBIE_VELOCITY);
-                setDY(ZOMBIE_VELOCITY);
-                setAngle(static_cast<double>(ZombieAngles::SOUTHWEST));
-            }
+            setDX(-ZOMBIE_VELOCITY);
+            setDY(ZOMBIE_VELOCITY);
+            setAngle(static_cast<double>(ZombieAngles::SOUTHWEST));
             break;
         case ZombieDirection::DIR_L:
-            if (checkBounds(startX - ZOMBIE_VELOCITY, startY)) {
-                setDX(-ZOMBIE_VELOCITY);
-                setDY(0);
-                setAngle(static_cast<double>(ZombieAngles::WEST));
-            }
+            setDX(-ZOMBIE_VELOCITY);
+            setDY(0);
+            setAngle(static_cast<double>(ZombieAngles::WEST));
             break;
         case ZombieDirection::DIR_LU:
-            if (checkBounds(startX - ZOMBIE_VELOCITY, startY - ZOMBIE_VELOCITY)) {
-                setDX(-ZOMBIE_VELOCITY);
-                setDY(-ZOMBIE_VELOCITY);
-                setAngle(static_cast<double>(ZombieAngles::NORTHWEST));
-            }
+            setDX(-ZOMBIE_VELOCITY);
+            setDY(-ZOMBIE_VELOCITY);
+            setAngle(static_cast<double>(ZombieAngles::NORTHWEST));
             break;
         case ZombieDirection::DIR_U:
-            if (checkBounds(startX, startY - ZOMBIE_VELOCITY)) {
-                setDX(0);
-                setDY(-ZOMBIE_VELOCITY);
-                setAngle(static_cast<double>(ZombieAngles::NORTH));
-            }
+            setDX(0);
+            setDY(-ZOMBIE_VELOCITY);
+            setAngle(static_cast<double>(ZombieAngles::NORTH));
             break;
         case ZombieDirection::DIR_RU:
-            if (checkBounds(startX + ZOMBIE_VELOCITY, startY - ZOMBIE_VELOCITY)) {
-                setDX(ZOMBIE_VELOCITY);
-                setDY(-ZOMBIE_VELOCITY);
-                setAngle(static_cast<double>(ZombieAngles::NORTHEAST));
-            }
+            setDX(ZOMBIE_VELOCITY);
+            setDY(-ZOMBIE_VELOCITY);
+            setAngle(static_cast<double>(ZombieAngles::NORTHEAST));
             break;
         case ZombieDirection::DIR_INVALID:  // Shouldn't ever happens, gets rid of warning
             break;
     }
 
+    // Frames are used to make sure the zombie doesn't move through the path too quickly/slowly
     if (frame > 0) {
         --frame;
     } else {
@@ -157,7 +146,7 @@ void Zombie::generateMove() {
         ++step;
     }
 
-    setCurDir(d);
+    setCurDir(direction);
     setState(ZombieState::ZOMBIE_MOVE);
 }
 
@@ -184,13 +173,8 @@ string Zombie::generatePath(const float xStart, const float yStart,
     // path to be generated
     string path;
 
-    // current node & child node
-    static Node curNode;
-    static Node childNode;
-
     // priority queue
     static array<priority_queue<Node>, 2> pq;
-    //static priority_queue<Node> pq[2];
 
     // reset the node maps
     memset(closedNodes, 0, sizeof(closedNodes[0][0]) * ROW * COL);
@@ -201,16 +185,15 @@ string Zombie::generatePath(const float xStart, const float yStart,
     const int xNodeDest = static_cast<int>(xDest / TILE_SIZE);
     const int yNodeDest = static_cast<int>(yDest / TILE_SIZE);
 
-    // create the start node and push into open list
-    curNode = Node(xNodeStart, yNodeStart, 0, 0);
+    // create the start node and push the start node into open list
+    Node curNode(xNodeStart, yNodeStart);
     curNode.updatePriority(xNodeDest, yNodeDest);
     pq[index].push(curNode);
 
     // A* path finding
     while (!pq[index].empty()) {
-        Node tmp = pq[index].top();
         // get the current node with the highest priority from open list
-        curNode = Node(tmp.getXPos(), tmp.getYPos(), tmp.getLevel(), tmp.getPriority());
+        curNode = pq[index].top();
 
         x = curNode.getXPos();
         y = curNode.getYPos();
@@ -252,7 +235,7 @@ string Zombie::generatePath(const float xStart, const float yStart,
                     || gameMap[xdx][ydy] == 1 || closedNodes[xdx][ydy] == 1)) {
 
                 // generate a child node
-                childNode = Node(xdx, ydy, curNode.getLevel(), curNode.getPriority());
+                Node childNode(xdx, ydy, curNode.getLevel(), curNode.getPriority());
                 childNode.nextLevel(i);
                 childNode.updatePriority(xNodeDest, yNodeDest);
 
@@ -295,13 +278,4 @@ string Zombie::generatePath(const float xStart, const float yStart,
     }
 
     return ""; // no route found
-}
-
-/**
- * Check to see if the zombie is still within the screen bounds before moving
- * Fred Yang
- * Feb 14
- */
-constexpr bool Zombie::checkBounds(const float x, const float y) {
-    return (!(x < 0 || x > MAP_WIDTH || y < 0 || y > MAP_HEIGHT));
 }
