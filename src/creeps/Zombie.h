@@ -24,9 +24,6 @@ static constexpr int ZOMBIE_INIT_HP  = 100;
 static constexpr int ZOMBIE_VELOCITY = 150;
 static constexpr int ZOMBIE_FRAMES   = 30;
 
-// overlapped threshold
-static constexpr float OVERLAP = 0.01;
-
 // block threshold - check if zombie is blocked
 static constexpr float BLOCK_THRESHOLD = 0.5;
 

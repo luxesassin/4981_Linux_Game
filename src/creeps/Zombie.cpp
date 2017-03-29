@@ -67,32 +67,32 @@ bool Zombie::isMoving() const {
  * Zombie detects objects in vicinity.
  * In theory, zombies will only have a movement collision with a target
  * as their pathfinding should walk around obstacles.
- * Return:  0- nothing, 1- objects (trees, obstacles, etc), 
- *          2- marine, 3- turret, 4- barricade
+ * Return:  0- nothing, 1- zombie, 2- wall, 3- marine, 
+ *          4- turret, 5- barricade, 6- other objects(base tower)
  *
  * Note:
  * It's important for Zombie to know what exactly the object is.
- * objectId can be defined in GameManage.h or Global.h ??
+ * object typeId can be defined in GameManage.h
 */
 int Zombie::detectObj() const {
-    int objId = 0;
+    int objTypeId = 0;
     auto ch = GameManager::instance()->getCollisionHandler();
     
-    if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeObj, this), this)) {
-        objId = 1;
+    if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeZombie, this), this)) {
+        objTypeId = 1;
+    } else if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeWall, this), this)) {
+        objTypeId = 2;
     } else if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeMarine, this), this)) {
-        objId = 2;
+        objTypeId = 3;
     } else if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeTurret, this), this)) {
-        objId = 3;
+        objTypeId = 4;
     } else if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeBarricade,this),this)) {
-        objId = 4;
+        objTypeId = 5;
+    } else if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeObj,this),this)) {
+        objTypeId = 6;
     }
     
-    /*return (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeMarine, this), this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeObj, this), this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeBarricade,this),this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeTurret, this), this));*/
-    return objId;
+    return objTypeId;
 }
 
 /**
@@ -104,36 +104,26 @@ void Zombie::move(float moveX, float moveY, CollisionHandler& ch){
     ZombieDirection newDir = ZombieDirection::DIR_INVALID;
     ZombieDirection nextDir = ZombieDirection::DIR_INVALID;
 
-    float oldX = getX();
-    float oldY = getY();
+    const float oldX = getX();
+    const float oldY = getY();
 
-    //Move the Movable left or right
+    // Move the Movable left or right
     setX(getX() + moveX);
 
-    if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeMarine,this),this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeZombie,this),this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeWall,this),this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeBarricade,this),this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeTurret,this),this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeObj,this),this)) {
+    if (detectObj() > 0) {
         setX(getX() - moveX);
     }
 
-    //Move the Movable up or down
-    setY(getY()+moveY);
+    // Move the Movable up or down
+    setY(getY() + moveY);
 
-    if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeMarine,this),this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeZombie,this),this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeWall,this),this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeBarricade,this),this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeTurret,this),this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeObj,this),this)) {
+    if (detectObj() > 0) {
         setY(getY() - moveY);
     }
 
-    float curX = getX();
-    float curY = getY();
-    float dist = sqrt((curX - oldX)*(curX - oldX) + (curY - oldY)*(curY - oldY));
+    const float curX = getX();
+    const float curY = getY();
+    const float dist = sqrt((curX - oldX)*(curX - oldX) + (curY - oldY)*(curY - oldY));
 
     // zombie blocked
     if (dist < BLOCK_THRESHOLD) {
@@ -141,7 +131,7 @@ void Zombie::move(float moveX, float moveY, CollisionHandler& ch){
         size_t found = pth.find_first_not_of('0' + static_cast<int>(dir));
         
         if (found != string::npos) {
-          nextDir = static_cast<ZombieDirection>(stoi(pth.substr(found,1)));
+          nextDir = static_cast<ZombieDirection>(stoi(pth.substr(found, 1)));
         }
 
         // If blocked, searching for better direction
@@ -197,19 +187,19 @@ void Zombie::generateMove() {
     const ZombieDirection direction = getMoveDir();
 
     // detect surroundings
-    int collisionObjId = detectObj();
+    const int collisionObjId = detectObj();
     
     // Path is empty or preferrable objects appear in vicinity, prepared to 
     // switch state.
-    if (direction == ZombieDirection::DIR_INVALID || collisionObjId > 1) {
+    if (direction == ZombieDirection::DIR_INVALID || collisionObjId > 0) {
         if (frame > 0) {
             --frame;
         }
 
-        if (collisionObjId > 1) { // marine, turret, or barricade
-            setState(ZombieState::ZOMBIE_ATTACK);
-        } else {
+        if (collisionObjId > 5) { // base
             setState(ZombieState::ZOMBIE_IDLE);
+        } else if (collisionObjId > 2) { // marine, turret, or barricade
+            setState(ZombieState::ZOMBIE_ATTACK);
         }
         
         return;
@@ -279,7 +269,7 @@ void Zombie::generateMove() {
  * March 15
  */
 string Zombie::generatePath(const Point& start) {
-    return generatePath(start, Point(MAP_WIDTH/2, MAP_HEIGHT/2));
+    return generatePath(start, Point(MAP_WIDTH / 2, MAP_HEIGHT / 2));
 }
 
 /**
@@ -290,7 +280,6 @@ string Zombie::generatePath(const Point& start) {
 string Zombie::generatePath(const Point& start, const Point& dest) {
     // temp index
     int i, j;
-    char c;
 
     // priority queue index
     int index = 0;
@@ -302,34 +291,29 @@ string Zombie::generatePath(const Point& start, const Point& dest) {
     // path to be generated
     string path;
 
-    // current node & child node
-    static Node curNode;
-    static Node childNode;
-
     // priority queue
-    static priority_queue<Node> pq[2];
+    static array<priority_queue<Node>, 2> pq;
 
     // reset the node maps
     memset(closedNodes, 0, sizeof(int) * ROWS * COLS);
     memset(openNodes, 0, sizeof(int) * ROWS * COLS);
     memset(dirMap, 0, sizeof(int) * ROWS * COLS);
 
-    int xNodeStart = static_cast<int> (start.second + TILE_OFFSET) / TILE_SIZE;
-    int yNodeStart = static_cast<int> (start.first + TILE_OFFSET) / TILE_SIZE;
-    int xNodeDest = static_cast<int> (dest.second + TILE_OFFSET) / TILE_SIZE - 1;
-    int yNodeDest = static_cast<int> (dest.first + TILE_OFFSET) / TILE_SIZE - 1;
+    const int xNodeStart = static_cast<int> (start.second + TILE_OFFSET) / TILE_SIZE;
+    const int yNodeStart = static_cast<int> (start.first + TILE_OFFSET) / TILE_SIZE;
+    const int xNodeDest = static_cast<int> (dest.second + TILE_OFFSET) / TILE_SIZE - 1;
+    const int yNodeDest = static_cast<int> (dest.first + TILE_OFFSET) / TILE_SIZE - 1;
 
     // create the start node and push into open list
-    curNode = Node(xNodeStart, yNodeStart, 0, 0);
+    Node curNode(xNodeStart, yNodeStart);
     curNode.updatePriority(xNodeDest, yNodeDest);
     pq[index].push(curNode);
 
     // A* path finding
     while (!pq[index].empty()) {
         // get the current node with the highest priority from open list
-        curNode = Node(pq[index].top().getXPos(), pq[index].top().getYPos(),
-                       pq[index].top().getLevel(), pq[index].top().getPriority());
-
+        curNode = pq[index].top();
+        
         curRow = curNode.getXPos();
         curCol = curNode.getYPos();
 
@@ -347,16 +331,13 @@ string Zombie::generatePath(const Point& start, const Point& dest) {
             path = "";
             while (!(curRow == xNodeStart && curCol == yNodeStart)) {
                 j = dirMap[curRow][curCol];
-                c = '0' + (j + DIR_CAP/2)%DIR_CAP;
-                path = c + path;
+                path = static_cast<char>('0' + (j + DIR_CAP / 2) % DIR_CAP) + path;
                 curRow += MY[j];
                 curCol += MX[j];
             }
 
             // empty the leftover nodes
-            while (!pq[index].empty()) {
-                 pq[index].pop();
-            }
+            pq[index] = priority_queue<Node>();
 
             setPath(path);
             return path;
@@ -373,7 +354,7 @@ string Zombie::generatePath(const Point& start, const Point& dest) {
                 || gameMap[newRow][newCol] >= 1 || closedNodes[newRow][newCol] == 1)) {
 
                 // generate a child node
-                childNode = Node(newRow, newCol, curNode.getLevel(), curNode.getPriority());
+                Node childNode(newRow, newCol, curNode.getLevel(), curNode.getPriority());
                 childNode.nextLevel(i);
                 childNode.updatePriority(xNodeDest, yNodeDest);
 
@@ -383,30 +364,30 @@ string Zombie::generatePath(const Point& start, const Point& dest) {
                     pq[index].push(childNode);
                     
                     // update the parent direction info
-                    dirMap[newRow][newCol] = (i + DIR_CAP/2)%DIR_CAP;
+                    dirMap[newRow][newCol] = (i + DIR_CAP / 2) % DIR_CAP;
                 } else if (openNodes[newRow][newCol] > childNode.getPriority()) {
                     // update the priority info
                     openNodes[newRow][newCol] = childNode.getPriority();
                     
                     // update the parent direction info
-                    dirMap[newRow][newCol] = (i + DIR_CAP/2)%DIR_CAP;
+                    dirMap[newRow][newCol] = (i + DIR_CAP / 2) % DIR_CAP;
 
                     // use a backup queue to put the best node (with highest priority)
                     // onto the top of the queue, which can be chosen later to build the path.
                     while (!(pq[index].top().getXPos() == newRow &&
                            pq[index].top().getYPos() == newCol)) {
-                        pq[1-index].push(pq[index].top());
+                        pq[1 - index].push(pq[index].top());
                         pq[index].pop();
                     }
 
                     pq[index].pop();
 
-                    if (pq[index].size() > pq[1-index].size()) {
+                    if (pq[index].size() > pq[1 - index].size()) {
                         index = 1 - index;
                     }
 
                     while (!pq[index].empty()) {
-                        pq[1-index].push(pq[index].top());
+                        pq[1 - index].push(pq[index].top());
                         pq[index].pop();
                     }
 
