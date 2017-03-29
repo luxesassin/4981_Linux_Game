@@ -242,8 +242,7 @@ bool GameManager::createZombie(const float x, const float y) {
 
     zombieManager.insert({id, Zombie(id, zombieRect, moveRect, projRect, damRect)});
 
-    zombieManager.at(id).setPosition(x, y);
-    zombieManager.at(id).generatePath(x, y, MAP_WIDTH / 2 - BASE_WIDTH, MAP_HEIGHT / 2 - BASE_HEIGHT);
+    zombieManager.at(id).setPosition(x,y);
     zombieManager.at(id).setState(ZombieState::ZOMBIE_MOVE);
 
     return true;
