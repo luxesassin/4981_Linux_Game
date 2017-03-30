@@ -189,16 +189,24 @@ void Zombie::generateMove() {
     // detect surroundings
     const int collisionObjId = detectObj();
     
-    // Path is empty or preferrable objects appear in vicinity, prepared to 
-    // switch state.
-    if (direction == ZombieDirection::DIR_INVALID || collisionObjId > 0) {
+    // path is empty, prepared to switch state to IDLE
+    if (direction == ZombieDirection::DIR_INVALID) {
         if (frame > 0) {
             --frame;
         }
+        
+        setState(ZombieState::ZOMBIE_IDLE);
+        
+        return;
+    }
 
-        if (collisionObjId > 5) { // base
-            setState(ZombieState::ZOMBIE_IDLE);
-        } else if (collisionObjId > 2) { // marine, turret, or barricade
+    // preferrable objects appear in vicinity, prepared to attack
+    if (collisionObjId > 0) {
+        if (frame > 0) {
+            --frame;
+        }
+        
+        if (collisionObjId > 2) { // base, marine, turret, or barricade
             setState(ZombieState::ZOMBIE_ATTACK);
         }
         
