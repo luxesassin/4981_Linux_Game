@@ -2,8 +2,8 @@
 #include <random>
 #include <cassert>
 #include <utility>
-#include "Zombie.h"
 #include "Node.h"
+#include "Zombie.h"
 #include "../game/GameManager.h"
 #include "../log/log.h"
 using namespace std;
@@ -25,19 +25,14 @@ Zombie::~Zombie() {
  * Fred Yang
  * February 14
  */
-ZombieDirection Zombie::getMoveDir() const {
+ZombieDirection Zombie::getMoveDir() {
     if (frame > 0) {
         return dir;
     }
 
-    const int sp = getStep();
-    const string pth = getPath();
-    /*
-    cout << "path: " << pth << endl;
-    cout << sp << '-' << pth.length() << endl;
-    */
+    string pth = generatePath(Point(getX(),getY()));
 
-    return static_cast<ZombieDirection>(sp < static_cast<int>(pth.length()) ? stoi(pth.substr(sp,1)) : -1);
+    return static_cast<ZombieDirection>(pth.length() > 0 ? stoi(pth.substr(0,1)) : -1);
 }
 
 void Zombie::onCollision() {
@@ -48,7 +43,15 @@ void Zombie::collidingProjectile(int damage) {
     health -= damage;
 }
 
-/*
+void Zombie::attack() {
+    // Do nothing for now
+}
+
+void Zombie::die() {
+    // Do nothing for now
+}
+
+/**
  * Returns if the zombie is moving
  * Robert Arendac
  * March 7
@@ -57,38 +60,156 @@ bool Zombie::isMoving() const {
     return (state == ZombieState::ZOMBIE_MOVE);
 }
 
-/*
- * Does a check to see if the zombie already arrived at the target.
+/**
+ * Robert Arendac, Fred Yang
+ * March 28
+ *
+ * Zombie detects objects in vicinity.
  * In theory, zombies will only have a movement collision with a target
  * as their pathfinding should walk around obstacles.
- * Robert Arendac
- * March 18
+ * Return:  0- nothing, 1- zombie, 2- wall, 3- marine, 
+ *          4- turret, 5- barricade, 6- other objects(base tower)
+ *
+ * Note:
+ * It's important for Zombie to know what exactly the object is.
+ * object typeId can be defined in GameManage.h
 */
-bool Zombie::checkTarget() const {
+int Zombie::detectObj() const {
+    int objTypeId = 0;
     auto ch = GameManager::instance()->getCollisionHandler();
-    return (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeMarine, this), this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeObj, this), this)
-            || ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeTurret, this), this));
+    
+    if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeZombie, this), this)) {
+        objTypeId = 1;
+    } else if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeWall, this), this)) {
+        objTypeId = 2;
+    } else if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeMarine, this), this)) {
+        objTypeId = 3;
+    } else if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeTurret, this), this)) {
+        objTypeId = 4;
+    } else if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeBarricade,this),this)) {
+        objTypeId = 5;
+    } else if (ch.detectMovementCollision(ch.getQuadTreeEntities(ch.quadtreeObj,this),this)) {
+        objTypeId = 6;
+    }
+    
+    return objTypeId;
+}
+
+/**
+ * overriden move method, preventing zombies from blocking
+ * Fred Yang,  Robert Arendac
+ * March 15
+*/
+void Zombie::move(float moveX, float moveY, CollisionHandler& ch){
+    ZombieDirection newDir = ZombieDirection::DIR_INVALID;
+    ZombieDirection nextDir = ZombieDirection::DIR_INVALID;
+
+    const float oldX = getX();
+    const float oldY = getY();
+
+    // Move the Movable left or right
+    setX(getX() + moveX);
+
+    if (detectObj() > 0) {
+        setX(getX() - moveX);
+    }
+
+    // Move the Movable up or down
+    setY(getY() + moveY);
+
+    if (detectObj() > 0) {
+        setY(getY() - moveY);
+    }
+
+    const float curX = getX();
+    const float curY = getY();
+    const float dist = sqrt((curX - oldX)*(curX - oldX) + (curY - oldY)*(curY - oldY));
+
+    // zombie blocked
+    if (dist < BLOCK_THRESHOLD) {
+        string pth = getPath();
+        size_t found = pth.find_first_not_of('0' + static_cast<int>(dir));
+        
+        if (found != string::npos) {
+          nextDir = static_cast<ZombieDirection>(stoi(pth.substr(found, 1)));
+        }
+
+        // If blocked, searching for better direction
+        switch (dir) {
+            case ZombieDirection::DIR_R:
+                newDir = (nextDir == ZombieDirection::DIR_RD ? 
+                          ZombieDirection::DIR_D : ZombieDirection::DIR_U);
+                break;
+            case ZombieDirection::DIR_RD:
+                newDir = (nextDir == ZombieDirection::DIR_D ? 
+                          ZombieDirection::DIR_LD : ZombieDirection::DIR_RU);
+                break;
+            case ZombieDirection::DIR_D:
+                newDir = (nextDir == ZombieDirection::DIR_LD ?
+                          ZombieDirection::DIR_L : ZombieDirection::DIR_R);
+                break;
+            case ZombieDirection::DIR_LD:
+                newDir = (nextDir == ZombieDirection::DIR_L ?
+                          ZombieDirection::DIR_LU : ZombieDirection::DIR_RD);
+                break;
+            case ZombieDirection::DIR_L:
+                newDir = (nextDir == ZombieDirection::DIR_LU ? 
+                          ZombieDirection::DIR_U : ZombieDirection::DIR_D);
+                break;
+            case ZombieDirection::DIR_LU:
+                newDir = (nextDir == ZombieDirection::DIR_U ?
+                          ZombieDirection::DIR_RU : ZombieDirection::DIR_LD);
+                break;
+            case ZombieDirection::DIR_U:
+                newDir = (nextDir == ZombieDirection::DIR_RU ?
+                          ZombieDirection::DIR_R : ZombieDirection::DIR_L);
+                break;
+            case ZombieDirection::DIR_RU:
+                newDir = (nextDir == ZombieDirection::DIR_R ?
+                          ZombieDirection::DIR_RD : ZombieDirection::DIR_LU);
+                break;
+            case ZombieDirection::DIR_INVALID:
+                break;
+        }
+
+        // set current direction
+        setCurDir(newDir);
+    }
 }
 
 /**
  * Get the direction of the zombie and take a step in the appropriate direction
- * Rob, Fred
- * March 13
+ * Robert Arendac, Fred Yang
+ * March 28
 */
 void Zombie::generateMove() {
-    const ZombieDirection direction = getMoveDir();   //Direction zombie is moving
-    //cout << "move dir: " << d << " state: " << state << " Frame: " << frame << endl;
+     // Direction zombie is moving
+    const ZombieDirection direction = getMoveDir();
 
-    // Path is empty, shouldn't move
-    if (direction == ZombieDirection::DIR_INVALID || checkTarget()) {
+    // detect surroundings
+    const int collisionObjId = detectObj();
+    
+    // path is empty, prepared to switch state to IDLE
+    if (direction == ZombieDirection::DIR_INVALID) {
         if (frame > 0) {
             --frame;
         }
-
-        // Changed to attack state once attack code is ready
+        
         setState(ZombieState::ZOMBIE_IDLE);
+        
+        return;
+    }
 
+    // preferrable objects appear in vicinity, prepared to attack
+    if (collisionObjId > 0) {
+        if (frame > 0) {
+            --frame;
+        }
+        
+        if (collisionObjId > 2) { // base, marine, turret, or barricade
+            setState(ZombieState::ZOMBIE_ATTACK);
+        }
+        
         return;
     }
 
@@ -153,22 +274,27 @@ void Zombie::generateMove() {
 /**
  * A* algo generates a string of direction digits.
  * Fred Yang
+ * March 15
+ */
+string Zombie::generatePath(const Point& start) {
+    return generatePath(start, Point(MAP_WIDTH / 2, MAP_HEIGHT / 2));
+}
+
+/**
+ * A* algo generates a string of direction digits.
+ * Fred Yang
  * Feb 14
  */
-string Zombie::generatePath(const float xStart, const float yStart,
-        const float xDest, const float yDest) {
+string Zombie::generatePath(const Point& start, const Point& dest) {
+    // temp index
+    int i, j;
+
     // priority queue index
     int index = 0;
 
-    // temp index
-    int i;
-    int j;
-
-    // row / column index
-    int x;
-    int y;
-    int xdx;
-    int ydy;
+    // row & column index
+    int curRow, curCol;
+    int newRow, newCol;
 
     // path to be generated
     string path;
@@ -177,15 +303,16 @@ string Zombie::generatePath(const float xStart, const float yStart,
     static array<priority_queue<Node>, 2> pq;
 
     // reset the node maps
-    memset(closedNodes, 0, sizeof(closedNodes[0][0]) * ROW * COL);
-    memset(openNodes, 0, sizeof(openNodes[0][0]) * ROW * COL);
+    memset(closedNodes, 0, sizeof(int) * ROWS * COLS);
+    memset(openNodes, 0, sizeof(int) * ROWS * COLS);
+    memset(dirMap, 0, sizeof(int) * ROWS * COLS);
 
-    const int xNodeStart = static_cast<int>(xStart / TILE_SIZE);
-    const int yNodeStart = static_cast<int>(yStart / TILE_SIZE);
-    const int xNodeDest = static_cast<int>(xDest / TILE_SIZE);
-    const int yNodeDest = static_cast<int>(yDest / TILE_SIZE);
+    const int xNodeStart = static_cast<int> (start.second + TILE_OFFSET) / TILE_SIZE;
+    const int yNodeStart = static_cast<int> (start.first + TILE_OFFSET) / TILE_SIZE;
+    const int xNodeDest = static_cast<int> (dest.second + TILE_OFFSET) / TILE_SIZE - 1;
+    const int yNodeDest = static_cast<int> (dest.first + TILE_OFFSET) / TILE_SIZE - 1;
 
-    // create the start node and push the start node into open list
+    // create the start node and push into open list
     Node curNode(xNodeStart, yNodeStart);
     curNode.updatePriority(xNodeDest, yNodeDest);
     pq[index].push(curNode);
@@ -194,27 +321,27 @@ string Zombie::generatePath(const float xStart, const float yStart,
     while (!pq[index].empty()) {
         // get the current node with the highest priority from open list
         curNode = pq[index].top();
-
-        x = curNode.getXPos();
-        y = curNode.getYPos();
+        
+        curRow = curNode.getXPos();
+        curCol = curNode.getYPos();
 
         // remove the node from the open list
         pq[index].pop();
-        openNodes[x][y] = 0;
 
-        // mark it on the closed nodes map
-        closedNodes[x][y] = 1;
+        // mark it on open/close map
+        openNodes[curRow][curCol] = 0;
+        closedNodes[curRow][curCol] = 1;
 
         // quit searching when the destination is reached
-        if (x == xNodeDest && y == yNodeDest) {
+        if (curRow == xNodeDest && curCol == yNodeDest) {
             // generate the path from destination to start
             // by following the directions
             path = "";
-            while (!(x == xNodeStart && y == yNodeStart)) {
-                j = dirMap[x][y];
+            while (!(curRow == xNodeStart && curCol == yNodeStart)) {
+                j = dirMap[curRow][curCol];
                 path = static_cast<char>('0' + (j + DIR_CAP / 2) % DIR_CAP) + path;
-                x += MX[j];
-                y += MY[j];
+                curRow += MY[j];
+                curCol += MX[j];
             }
 
             // empty the leftover nodes
@@ -227,41 +354,42 @@ string Zombie::generatePath(const float xStart, const float yStart,
         // traverse neighbors
         for (i = 0; i < DIR_CAP;i++) {
             // neighbor coordinates
-            xdx = x + MX[i];
-            ydy = y + MY[i];
+            newRow = curRow + MY[i];
+            newCol = curCol + MX[i];
 
             // not evaluated & not outside (bound checking)
-            if (!(xdx < 0 || xdx > COL - 1 || ydy < 0 || ydy > ROW - 1
-                    || gameMap[xdx][ydy] == 1 || closedNodes[xdx][ydy] == 1)) {
+            if (!(newRow < 0 || newRow > COLS - 1 || newCol < 0 || newCol > ROWS - 1
+                || gameMap[newRow][newCol] >= 1 || closedNodes[newRow][newCol] == 1)) {
 
                 // generate a child node
-                Node childNode(xdx, ydy, curNode.getLevel(), curNode.getPriority());
+                Node childNode(newRow, newCol, curNode.getLevel(), curNode.getPriority());
                 childNode.nextLevel(i);
                 childNode.updatePriority(xNodeDest, yNodeDest);
 
                 // if it is not in the open list then add into that
-                if (openNodes[xdx][ydy] == 0) {
-                    openNodes[xdx][ydy] = childNode.getPriority();
+                if (openNodes[newRow][newCol] == 0) {
+                    openNodes[newRow][newCol] = childNode.getPriority();
                     pq[index].push(childNode);
+                    
                     // update the parent direction info
-                    dirMap[xdx][ydy] = (i + DIR_CAP / 2) % DIR_CAP;
-                } else if (openNodes[xdx][ydy] > childNode.getPriority()) {
+                    dirMap[newRow][newCol] = (i + DIR_CAP / 2) % DIR_CAP;
+                } else if (openNodes[newRow][newCol] > childNode.getPriority()) {
                     // update the priority info
-                    openNodes[xdx][ydy]= childNode.getPriority();
+                    openNodes[newRow][newCol] = childNode.getPriority();
+                    
                     // update the parent direction info
-                    dirMap[xdx][ydy] = (i + DIR_CAP / 2) % DIR_CAP;
+                    dirMap[newRow][newCol] = (i + DIR_CAP / 2) % DIR_CAP;
 
-                    // use a queue and a backup queue to put the best node (with highest priority)
-                    // on the top of the queue, which can be chosen later on to build the path.
-                    while (!(pq[index].top().getXPos() == xdx &&
-                           pq[index].top().getYPos() == ydy)) {
-                        pq[1-index].push(pq[index].top());
+                    // use a backup queue to put the best node (with highest priority)
+                    // onto the top of the queue, which can be chosen later to build the path.
+                    while (!(pq[index].top().getXPos() == newRow &&
+                           pq[index].top().getYPos() == newCol)) {
+                        pq[1 - index].push(pq[index].top());
                         pq[index].pop();
                     }
 
                     pq[index].pop();
 
-                    // switch to pq with smaller size
                     if (pq[index].size() > pq[1 - index].size()) {
                         index = 1 - index;
                     }
@@ -270,6 +398,7 @@ string Zombie::generatePath(const float xStart, const float yStart,
                         pq[1 - index].push(pq[index].top());
                         pq[index].pop();
                     }
+
                     index = 1 - index;
                     pq[index].push(childNode);
                 }

@@ -16,17 +16,21 @@
 #include "../view/Window.h"
 #include "../basic/Movable.h"
 
-static constexpr int ZOMBIE_VELOCITY = 50;
-static constexpr int ZOMBIE_INIT_HP  = 100;
-static constexpr int ZOMBIE_FRAMES   = 50;
+typedef std::pair<float, float> Point;
+
 static constexpr int ZOMBIE_HEIGHT   = 125;
 static constexpr int ZOMBIE_WIDTH    = 75;
+static constexpr int ZOMBIE_INIT_HP  = 100;
+static constexpr int ZOMBIE_VELOCITY = 150;
+static constexpr int ZOMBIE_FRAMES   = 30;
+
+// block threshold - check if zombie is blocked
+static constexpr float BLOCK_THRESHOLD = 0.5;
 
 /* 8 possible directions combining left, right, up, down.
  * Fred Yang
  * Feb 14
  */
-static constexpr int DIR_CAP = 8;
 enum class ZombieDirection : int {
     DIR_R,
     DIR_RD,
@@ -77,18 +81,24 @@ public:
     void onCollision();
 
     void collidingProjectile(int damage);
+    
+    void move(float moveX, float moveY, CollisionHandler& ch) override;  // move method
 
     void generateMove();                    // A* movement
 
     bool isMoving() const;                  // Returns if the zombie should be moving
 
-    bool checkTarget() const;               // checks if the zombie already arrived at the target
+    int detectObj() const;                  // detect objects in vicinity
+    
+    void attack();                          // attack/destroy marines, turrets, or barricades
+    
+    void die();                             // zombie die method
 
-    ZombieDirection getMoveDir() const;     // get move direction
+    ZombieDirection getMoveDir();           // get move direction
 
     // A* path
-    std::string generatePath(const float xStart, const float yStart,
-            const float xDest, const float yDest);
+    std::string generatePath(const Point& start);
+    std::string generatePath(const Point& start, const Point& dest);
 
     /**
      * Set steps taken
@@ -183,9 +193,9 @@ public:
 private:
     int health;         // health points of zombie
     std::string path;   // A* path zombie should follow
-    ZombieState state; // 0 - idle, 1 - move, 2 - attack, 3 - die
+    ZombieState state;  // 0 - idle, 1 - move, 2 - attack, 3 - die
     int step;           // Number of steps zombie has taken in path
-    ZombieDirection dir;            // moving direction
+    ZombieDirection dir;// moving direction
     int frame;          // frames per tile
 };
 
