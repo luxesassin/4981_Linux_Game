@@ -3,7 +3,8 @@
 #include<random>
 #include "../log/log.h"
 
-Base::Base(int health) : Object(BASE_HEIGHT, BASE_WIDTH), health(health) {
+Base::Base(int32_t nid, const SDL_Rect dest, int health): Object(nid, dest, BASE_HEIGHT, BASE_WIDTH),
+        health(health) {
     setX((MAP_WIDTH / 2) - BASE_WIDTH / 2);
     setY((MAP_HEIGHT / 2) - BASE_HEIGHT / 2);
 
@@ -34,7 +35,9 @@ Point Base::getSpawnPoint() {
     int x;
     int y;
 
-    switch(distr(eng)){
+
+    switch(distr(eng)) {
+
         case 0://North
 
             //y point is fixed
@@ -47,28 +50,29 @@ Point Base::getSpawnPoint() {
         case 1://South
             y = getY() + getHeight() + GAP;
             x = distr(eng, decltype(distr)::param_type(getX() - GAP,
-                                                       getX()+  getWidth() + GAP));
+                    getX()+  getWidth() + GAP));
             break;
-        case 2://West
 
+        case 2://West
             //x point is fixed
             x = getX() - GAP;
             //y point is randomly generated
             y = distr(eng, decltype(distr)::param_type(getY() - GAP,
-                                                       getY() + getHeight() + GAP));
+                    getY() + getHeight() + GAP));
             break;
+
         case 3://East
             x = getY() + getWidth() + GAP;
             y = distr(eng, decltype(distr)::param_type(getY() - GAP,
-                                                       getY() + getHeight() + GAP));
+                    getY() + getHeight() + GAP));
             break;
     }
 
     //considering the player size
     if(x < getX())
-        x-=MARINE_WIDTH;
+        x -= MARINE_WIDTH;
     if(y < getY())
-        y-=MARINE_HEIGHT;
+        y -= MARINE_HEIGHT;
 
     return Point(x,y);
 }

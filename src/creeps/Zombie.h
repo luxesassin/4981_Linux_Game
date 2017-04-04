@@ -1,28 +1,36 @@
 #ifndef ZOMBIE_H
 #define ZOMBIE_H
+
 #include <string>
 #include <math.h>
 #include <random>
 #include <vector>
 #include <utility>
 #include <SDL2/SDL.h>
-#include "../sprites/LTexture.h"
 #include "../collision/HitBox.h"
 #include "../basic/Entity.h"
 #include "../collision/CollisionHandler.h"
 #include "../inventory/Inventory.h"
+#include "../collision/Quadtree.h"
 #include "../buildings/Base.h"
 #include "../view/Window.h"
 #include "../basic/Movable.h"
 
-static constexpr int ZOMBIE_VELOCITY = 50;
-static constexpr int ZOMBIE_INIT_HP  = 100;
-static constexpr int ZOMBIE_FRAMES   = 50;
+typedef std::pair<float, float> Point;
+
 static constexpr int ZOMBIE_HEIGHT   = 125;
 static constexpr int ZOMBIE_WIDTH    = 75;
+static constexpr int ZOMBIE_INIT_HP  = 100;
+static constexpr int ZOMBIE_VELOCITY = 150;
+static constexpr int ZOMBIE_FRAMES   = 30;
 
-// 8 possible directions
-static constexpr int DIR_CAP = 8;
+// block threshold - check if zombie is blocked
+static constexpr float BLOCK_THRESHOLD = 0.5;
+
+/* 8 possible directions combining left, right, up, down.
+ * Fred Yang
+ * Feb 14
+ */
 enum class ZombieDirection : int {
     DIR_R,
     DIR_RD,
@@ -35,7 +43,10 @@ enum class ZombieDirection : int {
     DIR_INVALID = -1
 };
 
-// Cardinal directions for setting angles
+/* Cardinal directions for setting angles, one angle for each movement direction.
+ * Robert Arendac
+ * March 14
+ */
 enum class ZombieAngles : int {
     NORTH = 0,
     NORTHEAST = 45,
@@ -47,10 +58,11 @@ enum class ZombieAngles : int {
     NORTHWEST = 315
 };
 
-// overlapped
-static constexpr float OVERLAP = 0.1;
-
-// zombie state
+/* zombie states, change when you want zombie to take a different action.
+ * Eg. go from moving to attacking
+ * Fred Yang
+ * March 14
+ */
 enum class ZombieState {
     ZOMBIE_IDLE,
     ZOMBIE_MOVE,
@@ -60,28 +72,33 @@ enum class ZombieState {
 
 class Zombie : public Movable {
 public:
-    Zombie(int health = ZOMBIE_INIT_HP, ZombieState state = ZombieState::ZOMBIE_IDLE, int step = 0,
-           ZombieDirection dir = ZombieDirection::DIR_INVALID, int frame = ZOMBIE_FRAMES,
-           float range = 400.0f);
+    Zombie(int32_t id, const SDL_Rect &dest, const SDL_Rect &movementSize, const SDL_Rect &projectileSize,
+        const SDL_Rect &damageSize, int health = ZOMBIE_INIT_HP, ZombieState state = ZombieState::ZOMBIE_IDLE,
+        int step = 0, ZombieDirection dir = ZombieDirection::DIR_INVALID, int frame = ZOMBIE_FRAMES, float range = 400.0f);
+
     virtual ~Zombie();
 
     void onCollision();
 
     void collidingProjectile(int damage);
+    
+    void move(float moveX, float moveY, CollisionHandler& ch) override;  // move method
 
-    void generateMove();            // A* movement
+    void generateMove();                    // A* movement
 
-    bool isMoving() const;                // Returns if the zombie should be moving
+    bool isMoving() const;                  // Returns if the zombie should be moving
 
-    bool checkTarget() const;               // checks if the zombie already arrived at the target
+    int detectObj() const;                  // detect objects in vicinity
+    
+    void attack();                          // attack/destroy marines, turrets, or barricades
+    
+    void die();                             // zombie die method
 
-    ZombieDirection getMoveDir() const;               // get move direction
-
-    static constexpr bool checkBounds(const float x, const float y);  // boundary checks
+    ZombieDirection getMoveDir();           // get move direction
 
     // A* path
-    std::string generatePath(const float xStart, const float yStart,
-            const float xDest, const float yDest);
+    std::string generatePath(const Point& start);
+    std::string generatePath(const Point& start, const Point& dest);
 
     /**
      * Set steps taken
@@ -184,9 +201,9 @@ public:
 private:
     int health;         // health points of zombie
     std::string path;   // A* path zombie should follow
-    ZombieState state; // 0 - idle, 1 - move, 2 - attack, 3 - die
+    ZombieState state;  // 0 - idle, 1 - move, 2 - attack, 3 - die
     int step;           // Number of steps zombie has taken in path
-    ZombieDirection dir;            // moving direction
+    ZombieDirection dir;// moving direction
     int frame;          // frames per tile
     float range;        // zombie's range.
 };
