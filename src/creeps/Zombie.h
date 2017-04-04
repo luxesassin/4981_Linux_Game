@@ -175,9 +175,11 @@ public:
 
     // returns the zombie's range.
     // Jamie, 2017-03-27.
-    inline float getRange() const {
-        return range_;
-    }
+    float getRange() const;
+
+    // find a target if not found, return false.
+    // Jamie, 2017-04-04.
+    bool findTarget();
 
 private:
     int health;         // health points of zombie
@@ -186,7 +188,7 @@ private:
     int step;           // Number of steps zombie has taken in path
     ZombieDirection dir;            // moving direction
     int frame;          // frames per tile
-    float range_;        // zombie's range.
+    float range;        // zombie's range.
 };
 
 #endif
